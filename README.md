@@ -1,5 +1,7 @@
 # Wayback-diff
 
+[![Greenkeeper badge](https://badges.greenkeeper.io/MarcelRaschke/wayback-diff.svg)](https://greenkeeper.io/)
+
 ## **[Wayback-diff](https://github.com/ftsalamp/wayback-diff)**
 
 This project uses a lot of code from the [web-monitoring-ui](https://github.com/edgi-govdata-archiving/web-monitoring-ui) project. It aims to query the web-monitoring-processing server directly and then render the changes depending on the parameters given.
