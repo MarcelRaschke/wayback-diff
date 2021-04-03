@@ -11,7 +11,7 @@
     "babel-preset-stage-0": "6.24.1",
     "browser-sync": "^2.24.4",
     "cssnano": "^4.0.0-rc.2",
-    "npm-run-all": "4.1.2",
+    "npm-run-all": "4.1.5",
     "prop-types": "^15.6.1",
     "qs": "latest",
     "react": "^16.3.2",
