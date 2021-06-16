@@ -28,8 +28,14 @@ export default {
     babel({
       babelrc: false,
       exclude: 'node_modules/**',
-      presets: [ [ 'es2015', { modules: false } ], 'stage-0', 'react' ],
-      plugins: [ 'external-helpers' ]
+      presets: [ '@babel/env', '@babel/preset-react' ],
+      plugins: [ '@babel/plugin-proposal-export-default-from' ]
+    }),
+    replace({ 'process.env.NODE_ENV': JSON.stringify('development'),
+      'process.env': JSON.stringify(process.env)}),
+    resolve({
+      browser: true,
+      main: true
     }),
     cjs({
       exclude: 'node_modules/process-es6/**',
@@ -37,15 +43,10 @@ export default {
         'node_modules/**'
       ],
       namedExports: {
-        'node_modules/react/index.js': ['PureComponent', 'Component']
+        'node_modules/react/index.js': ['PureComponent', 'Component'],
+        'node_modules/simple-xpath-position/index.js': ['fromNode']
       }
     }),
-    globals(),
-    replace({ 'process.env.NODE_ENV': JSON.stringify('development'),
-      'process.env': JSON.stringify(process.env)}),
-    resolve({
-      browser: true,
-      main: true
-    })
+    globals()
   ]
 };
