@@ -1,4 +1,6 @@
+import PropTypes from 'prop-types';
 import React from 'react';
+import IframeLoader from './iframe-loader.jsx';
 
 /**
  * @typedef {Object} SandboxedHtmlProps
@@ -8,7 +10,6 @@ import React from 'react';
  *           function to apply to the document before rendering.
  */
 
-
 /**
  * Display HTML source code or document in a sandboxed frame.
  *
@@ -17,15 +18,17 @@ import React from 'react';
  * @params {SandboxedHtmlProps} props
  */
 export default class SandboxedHtml extends React.PureComponent {
+  static propTypes = {
+    loader: PropTypes.object,
+    html: PropTypes.string,
+    transform: PropTypes.func,
+    baseUrl: PropTypes.string
+  };
+
   constructor (props) {
     super(props);
+    this.loaderRef = React.createRef();
     this._frame = null;
-  }
-
-
-  shouldComponentUpdate(){
-    this.addLoaderImg();
-    return true;
   }
 
   componentDidMount () {
@@ -38,15 +41,17 @@ export default class SandboxedHtml extends React.PureComponent {
   }
 
   render () {
-    return <iframe height={window.innerHeight} onLoad={()=>{this.handleHeight();
-      this.removeLoaderImg();}}
-    sandbox="allow-same-origin allow-forms allow-scripts"
-    ref={frame => this._frame = frame}
-    />;
+    return <div>
+      <iframe height={window.innerHeight} width={'100%'} onLoad={() => { this.handleHeight(); this.removeLoaderImg(); }}
+        sandbox="allow-same-origin allow-forms allow-scripts"
+        ref={(frame) => { this._frame = frame; }}
+      />
+      <IframeLoader ref={this.loaderRef} loader={this.props.loader}/>
+    </div>;
   }
 
   _updateContent () {
-    let source = transformSource(this.props.html, document => {
+    const source = transformSource(this.props.html, document => {
       if (this.props.transform) {
         document = this.props.transform(document) || document;
       }
@@ -57,34 +62,24 @@ export default class SandboxedHtml extends React.PureComponent {
   }
 
   handleHeight () {
-    let offsetHeight = this._frame.contentDocument.documentElement.scrollHeight;
-    let offsetWidth = this._frame.contentDocument.documentElement.scrollWidth;
+    const offsetHeight = this._frame.contentDocument.documentElement.scrollHeight;
     if (offsetHeight > 0.1 * this._frame.height) {
       this._frame.height = offsetHeight + (offsetHeight * 0.01);
     } else {
       this._frame.height = 0.5 * this._frame.height;
     }
-    if (offsetWidth > this._frame.clientWidth) {
-      this._frame.width = offsetWidth;
-    }
   }
 
   removeLoaderImg () {
-    this._frame.loaderImage.parentNode.removeChild(this._frame.loaderImage);
+    this.loaderRef.current.setLoaderStyle(null);
   }
 
   addLoaderImg () {
-    let width = this._frame.contentDocument.scrollingElement.offsetWidth;
-
-    let centerX = this._frame.offsetLeft + width / 2;
-
-    var elem = document.createElement('img');
-    elem.className = 'waybackDiffIframeLoader';
-    var cssText = 'position:absolute;left:'+centerX+'px;top:50%;';
-    elem.setAttribute('style', cssText);
-    elem.src = this.props.iframeLoader;
-    document.body.appendChild(elem);
-    this._frame.loaderImage = elem;
+    const width = this._frame.contentDocument.scrollingElement.offsetWidth;
+    const centerX = this._frame.offsetLeft + width / 2;
+    this.loaderRef.current.setLoaderStyle(
+      { position: 'absolute', left: centerX + 'px', top: '50%' }
+    );
   }
 }
 
@@ -115,8 +110,7 @@ function transformSource (source, transformer) {
  */
 function setDocumentBase (document, baseUrl) {
   if (baseUrl) {
-    const base = document.querySelector('base')
-      || document.createElement('base');
+    const base = document.querySelector('base') || document.createElement('base');
     base.href = baseUrl;
 
     // <meta charset> tags don't work unless they are first, so if one is
@@ -128,11 +122,9 @@ function setDocumentBase (document, baseUrl) {
     }
     if (beforeElement) {
       beforeElement.parentNode.insertBefore(base, beforeElement);
-    }
-    else {
+    } else {
       document.head.appendChild(base);
     }
   }
-
   return document;
 }

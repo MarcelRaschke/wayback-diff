@@ -1,55 +1,66 @@
+import PropTypes from 'prop-types';
 import React from 'react';
-import { checkResponse, fetch_with_timeout } from '../js/utils';
 
 /**
  * Display an error message depending on props
- *
- * @class ErrorMessage
- * @extends {React.Component}
  */
-export default class ErrorMessage extends React.Component {
+const ErrorMessage = ({ code, url, timestamp }) => {
+  let msg = 'We are sorry but there is a problem comparing these captures. Please try two different ones.';
+  let simhash = false;
+  let year = timestamp ? timestamp.substring(0, 4) : '';
 
-  constructor (props) {
-    super(props);
-
-    this._calculateSimhash = this._calculateSimhash.bind(this);
-    this._errorHandled = this._errorHandled.bind(this);
-    this._reloadPage = this._reloadPage.bind(this);
-
+  switch (code) {
+  case '404':
+    msg = `The Wayback Machine has not archived ${url}.`;
+    break;
+  case '422':
+    // https://github.com/edgi-govdata-archiving/web-monitoring-diff/blob/be748a7f0bbdd4251f680e22d3e433d1be93f858/web_monitoring_diff/server/server.py#L568
+    msg = `The captures of ${url} cannot be compared because we support only HTML comparison.`;
+    break;
+  case 'CAPTURE_NOT_FOUND':
+    msg = `There are no data available for ${url} at ${timestamp}.`;
+    simhash = true;
+    break;
+  case 'NOT_CAPTURED':
+    msg = `The Wayback Machine has no similarity data for ${url} and year ${year}.`;
+    simhash = true;
+    break;
+  case 'NO_CAPTURES':
+    msg = `The Wayback Machine has not archived ${url} for year ${year}.`;
+    break;
+  case 'NO_DIFFERENT_CAPTURES':
+    msg = `There aren't any different captures for ${url} for year ${year} to display their similarity.`;
+    break;
+  // Occurs when AJAX fetch for CDX is canceled.
+  case '_this4.errorHandled is not a function': // Chrome
+  case 'NetworkError when attempting to fetch resource.': // FF
+  case 'Load failed': // Safari
+    msg = `The capture of ${url} at ${timestamp} cannot be used for comparisons. Its possible it is a redirect.`;
+    break;
   }
 
-  render () {
-    console.warn(this.props.code);
-    if (this.props.code === '404') {
-      return (
-        <div className='alert alert-warning' role='alert'>The Wayback Machine doesn't have {this.props.url} archived.</div>
-      );
-    } else if (this.props.code === 'NoSimhash') {
-      return (
-        <div>
-          <div className='alert alert-warning' role='alert'>The Wayback Machine doesn't have Simhash data for {this.props.url} and year {this.props.year}.</div>
-          <button className="btn btn-sm" id="calcButton" onClick={this._calculateSimhash}>Calculate now</button>
-        </div>
-      );
-    }
-    return (
-      <div className='alert alert-warning' role='alert'>Communication with the Wayback Machine
-          is not possible at the moment. Please try again later.</div>
-    );
-  }
+  const changesUrl = `/web/changes/${url}`;
 
-  _calculateSimhash () {
-    const url = `${this.props.conf.waybackDiscoverDiff}/calculate-simhash?url=${encodeURIComponent(this.props.url)}&year=${this.props.year}`;
-    fetch_with_timeout(fetch(url)).then(response => {return checkResponse(response);})
-      .then(() => {setTimeout(this._reloadPage, 10000);})
-      .catch(error => {this._errorHandled(error.message);});
-  }
+  return (
+    <>
+      <div className='alert alert-warning' role='alert'>{ msg }</div>
+      <div className="btn-group">
+        <button className="btn btn-sm" onClick={() => window.history.back()}>&laquo; Go back</button>
+        { simhash &&
+          <>
+            <span>&nbsp;</span>
+            <a href={changesUrl} className="btn btn-default btn-sm" id="calcButton">Visit Wayback Changes to calculate now</a>
+          </>
+        }
+      </div>
+    </>
+  );
+};
 
-  _errorHandled (error) {
-    this.props.errorHandledCallback(error);
-  }
+ErrorMessage.propTypes = {
+  code: PropTypes.string,
+  url: PropTypes.string,
+  timestamp: PropTypes.string
+};
 
-  _reloadPage () {
-    window.location.reload(true);
-  }
-}
+export default ErrorMessage;

@@ -1,6 +1,7 @@
+import PropTypes from 'prop-types';
 import React from 'react';
 import '../css/diff.css';
-import {diffTypes} from '../js/constants/diff-types';
+import { diffTypes } from '../js/constants/diff-types';
 
 import HighlightedTextDiff from './highlighted-text-diff.jsx';
 import InlineRenderedDiff from './inline-rendered-diff.jsx';
@@ -8,7 +9,9 @@ import SideBySideRenderedDiff from './side-by-side-rendered-diff.jsx';
 import ChangesOnlyDiff from './changes-only-diff.jsx';
 import RawVersion from './raw-version.jsx';
 import SideBySideRawVersions from './side-by-side-raw-versions.jsx';
-import { checkResponse, fetch_with_timeout } from '../js/utils.js';
+import { checkResponse, fetchWithTimeout } from '../js/utils.js';
+import Loading from './loading.jsx';
+import isNil from 'lodash/isNil';
 
 /**
  * @typedef DiffViewProps
@@ -27,46 +30,50 @@ import { checkResponse, fetch_with_timeout } from '../js/utils.js';
  */
 
 export default class DiffView extends React.Component {
-
   isMountedNow = false;
+
+  static propTypes = {
+    a: PropTypes.object, // TODO check this, potential optimization.
+    b: PropTypes.object,
+    diffType: PropTypes.string,
+    loader: PropTypes.object,
+    webMonitoringProcessingURL: PropTypes.string,
+    errorHandledCallback: PropTypes.func,
+    page: PropTypes.object
+  };
 
   constructor (props) {
     super(props);
 
     this._abortController = new window.AbortController();
 
-    this.state = {diffData: null};
+    this.state = { diffData: null };
   }
 
-  componentWillMount () {
-    const {props} = this;
+  componentDidMount () {
+    this.isMountedNow = true;
+    const { props } = this;
     if (this._canFetch(props)) {
       this._loadDiffData(props.page, props.a, props.b, props.diffType);
     }
   }
 
-  componentDidMount() {
-    this.isMountedNow = true;
-  }
-
-  componentWillUnmount(){
+  componentWillUnmount () {
     this.isMountedNow = false;
     this._abortController.abort();
   }
 
-  /**
-   * @param {DiffViewProps} nextProps
-   */
-  componentWillReceiveProps (nextProps) {
-    if (this._canFetch(nextProps) && !this._propsSpecifySameDiff(nextProps)) {
-      this._loadDiffData(nextProps.page, nextProps.a, nextProps.b, nextProps.diffType);
+  componentDidUpdate (prevProps) {
+    const { props } = this;
+    if (this._canFetch(props) && !this._propsSpecifySameDiff(props, prevProps)) {
+      this._loadDiffData(props.page, props.a, props.b, props.diffType);
     }
   }
 
   render () {
     if (!this.state.diffData) {
-      const Loader = () => this.props.loader;
-      return <Loader/>;
+      const Loader = () => isNil(this.props.loader) ? <Loading/> : this.props.loader;
+      return <div className="loading"><Loader/></div>;
     }
     return (
       <div className="diff-view">
@@ -77,17 +84,13 @@ export default class DiffView extends React.Component {
   }
 
   renderNoChangeMessage () {
-
     const className = 'diff-view__alert alert alert-warning';
-
     if (this.state.diffData.change_count === 0) {
-
       return <div className={className}>
               There were <strong>no changes for this diff type</strong>. (Other diff
               types may show changes.)
       </div>;
     }
-
     return null;
   }
 
@@ -127,7 +130,7 @@ export default class DiffView extends React.Component {
     case diffTypes.SIDE_BY_SIDE_RENDERED.value:
       return (
         <SideBySideRenderedDiff diffData={this.state.diffData} page={this.props.page}
-          iframeLoader={this.props.iframeLoader}/>
+          loader={this.props.loader}/>
       );
     case diffTypes.OUTGOING_LINKS.value:
       return (
@@ -165,9 +168,8 @@ export default class DiffView extends React.Component {
    */
   _propsSpecifySameDiff (newProps, props) {
     props = props || this.props;
-    return props.a === newProps.a
-      && props.b === newProps.b
-      && props.diffType === newProps.diffType;
+    return props.a === newProps.a && props.b === newProps.b &&
+      props.diffType === newProps.diffType;
   }
 
   /**
@@ -185,35 +187,40 @@ export default class DiffView extends React.Component {
     // const fromList = this.props.pages && this.props.pages.find(
     //     (page: Page) => page.uuid === pageId);
     // Promise.resolve(fromList || this.context.api.getDiff(pageId, aId, bId, changeDiffTypes[diffType]))
-    this.setState({diffData: null});
+    this.setState({ diffData: null });
     if (!diffTypes[diffType].diffService) {
       return Promise.all([
-        fetch_with_timeout(fetch(a.uri, {mode: 'cors'})),
-        fetch_with_timeout(fetch(b.uri, {mode: 'cors'}))
+        fetchWithTimeout(a.uri, { mode: 'cors' }),
+        fetchWithTimeout(b.uri, { mode: 'cors' })
       ])
         .then(([rawA, rawB]) => {
-          return {raw: true, rawA, rawB};
+          return { raw: true, rawA, rawB };
         })
         .catch(error => error)
-        .then(data => this.setState({diffData: data}));
+        .then(data => this.setState({ diffData: data }));
     }
-    var url = `${this.props.webMonitoringProcessingURL}/`;
-    url += `${diffTypes[diffType].diffService}?format=json&pass_headers=cookie&include=all&a=${a}&b=${b}`;
-    fetch_with_timeout(fetch(url, {credentials: 'include'}))
-      .then(response => {return checkResponse(response);})
+    const url = new URL(this.props.webMonitoringProcessingURL + '/' + diffTypes[diffType].diffService);
+    url.searchParams.append('strict_urls', 'WBM');
+    url.searchParams.append('format', 'json');
+    url.searchParams.append('pass_headers', 'cookie');
+    url.searchParams.append('include', 'all');
+    url.searchParams.append('a', a);
+    url.searchParams.append('b', b);
+    fetchWithTimeout(url, { credentials: 'include' })
+      .then(checkResponse)
       .then(response => response.json())
       .then((data) => {
         this.setState({
           diffData: data
         });
       })
-      .catch(error => {this._errorHandled(error.message);});
+      .catch(error => { this._errorHandled(error.message); });
   }
 
-  _errorHandled(error) {
+  _errorHandled (error) {
     if (this.isMountedNow) {
       this.props.errorHandledCallback(error);
-      this.setState({showError: true});
+      this.setState({ showError: true });
     }
   }
 }
